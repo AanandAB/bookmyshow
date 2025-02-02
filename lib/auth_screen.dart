@@ -11,7 +11,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _auth = FirebaseAuth.instance;
   final _googleSignIn = GoogleSignIn(
     clientId:
-        '950609188794-sk6alkdntlidc7742qqobho85bh9qevg.apps.googleusercontent.com', // Replace with your actual client ID
+        '117587654364-5t94v01vcrbggn5kar9gqlutrrnjqmk6.apps.googleusercontent.com', // Replace with your actual client ID
     scopes: ['email', 'profile'],
   );
   final _formKey = GlobalKey<FormState>();
@@ -28,7 +28,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      final AuthCredential credential = GoogleAuthProvider.credential(
+      final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
