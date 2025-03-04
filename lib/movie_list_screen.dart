@@ -40,16 +40,19 @@ class _MovieListScreenState extends State<MovieListScreen> {
     });
   }
 
+  // Add the _showLocationSelector method here
   void _showLocationSelector(BuildContext context) {
     showModalBottomSheet(
       context: context,
       builder: (ctx) => FutureBuilder<QuerySnapshot>(
         future: FirebaseFirestore.instance.collection('locations').get(),
         builder: (ctx, snapshot) {
-          if (snapshot.hasError)
+          if (snapshot.hasError) {
             return Center(child: Text('Error loading locations'));
-          if (!snapshot.hasData)
+          }
+          if (!snapshot.hasData) {
             return Center(child: CircularProgressIndicator());
+          }
 
           final locations = snapshot.data!.docs;
           return ListView.builder(
@@ -58,8 +61,7 @@ class _MovieListScreenState extends State<MovieListScreen> {
             itemBuilder: (ctx, i) => ListTile(
               leading: Icon(Icons.location_on),
               title: Text(locations[i]['name']),
-              subtitle:
-                  Text(locations[i]['theaters'].join(', ')), // Show theaters
+              subtitle: Text(locations[i]['theaters'].join(', ')),
               onTap: () {
                 _saveLocation(locations[i].id, locations[i]['name']);
                 Navigator.pop(ctx);

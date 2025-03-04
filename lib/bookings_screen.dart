@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'bookinghistoryscreen.dart';
 
 class BookingScreen extends StatefulWidget {
   final String movieId;
@@ -17,8 +18,6 @@ class _BookingScreenState extends State<BookingScreen> {
   String? selectedTime;
   List<String> selectedSeatNumbers = [];
   final double ticketPrice = 12.99;
-
-  // Available show times
   final List<String> showTimes = [
     '10:00 AM',
     '1:00 PM',
@@ -26,8 +25,6 @@ class _BookingScreenState extends State<BookingScreen> {
     '7:00 PM',
     '10:00 PM',
   ];
-
-  // Seat layout configuration
   final int rows = 8;
   final int seatsPerRow = 10;
   final Set<String> bookedSeats = {};
@@ -39,6 +36,8 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _fetchBookedSeats() async {
+    if (selectedTime == null) return;
+
     final bookingsSnapshot = await FirebaseFirestore.instance
         .collection('bookings')
         .where('movieId', isEqualTo: widget.movieId)
@@ -78,10 +77,24 @@ class _BookingScreenState extends State<BookingScreen> {
     }
 
     try {
+      // Validate movie exists
+      final movieDoc = await FirebaseFirestore.instance
+          .collection('movies')
+          .doc(widget.movieId)
+          .get();
+
+      if (!movieDoc.exists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Movie not found')),
+        );
+        return;
+      }
+
       // Create booking document
       await FirebaseFirestore.instance.collection('bookings').add({
         'userId': user.uid,
         'movieId': widget.movieId,
+        'movieTitle': movieDoc['title'],
         'timestamp': DateTime.now(),
         'showTime': selectedTime,
         'seatNumbers': selectedSeatNumbers,
@@ -96,6 +109,7 @@ class _BookingScreenState extends State<BookingScreen> {
           .collection('bookingHistory')
           .add({
         'movieId': widget.movieId,
+        'movieTitle': movieDoc['title'],
         'timestamp': DateTime.now(),
         'showTime': selectedTime,
         'seatNumbers': selectedSeatNumbers,
@@ -117,7 +131,7 @@ class _BookingScreenState extends State<BookingScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to book tickets. Please try again.'),
+          content: Text('Failed to book tickets. Error: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );
@@ -192,8 +206,12 @@ class _BookingScreenState extends State<BookingScreen> {
           IconButton(
             icon: Icon(Icons.history),
             onPressed: () {
-              // Navigate to booking history
-              // Implementation needed
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BookingHistoryScreen(),
+                ),
+              );
             },
           ),
         ],
@@ -218,7 +236,6 @@ class _BookingScreenState extends State<BookingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Movie details
                   Text(
                     movie['title'],
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -227,8 +244,6 @@ class _BookingScreenState extends State<BookingScreen> {
                   Text('Genre: ${movie['genre']}'),
                   Text('Duration: ${movie['duration']} mins'),
                   Text('Rating: ${movie['rating']}'),
-
-                  // Show times
                   SizedBox(height: 24),
                   Text(
                     'Select Show Time',
@@ -247,6 +262,7 @@ class _BookingScreenState extends State<BookingScreen> {
                             onSelected: (selected) {
                               setState(() {
                                 selectedTime = selected ? time : null;
+                                selectedSeatNumbers.clear();
                               });
                               _fetchBookedSeats();
                             },
@@ -255,8 +271,6 @@ class _BookingScreenState extends State<BookingScreen> {
                       }).toList(),
                     ),
                   ),
-
-                  // Seat selection
                   SizedBox(height: 24),
                   Text(
                     'Select Seats',
@@ -264,8 +278,6 @@ class _BookingScreenState extends State<BookingScreen> {
                   ),
                   SizedBox(height: 8),
                   _buildSeatLayout(),
-
-                  // Legend
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -276,8 +288,6 @@ class _BookingScreenState extends State<BookingScreen> {
                       _buildLegendItem('Booked', Colors.grey),
                     ],
                   ),
-
-                  // Price summary
                   SizedBox(height: 24),
                   Container(
                     padding: EdgeInsets.all(16),
@@ -309,10 +319,8 @@ class _BookingScreenState extends State<BookingScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Total',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            Text('Total',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
                             Text(
                               '\$${(ticketPrice * selectedSeatNumbers.length).toStringAsFixed(2)}',
                               style: TextStyle(fontWeight: FontWeight.bold),
@@ -322,8 +330,6 @@ class _BookingScreenState extends State<BookingScreen> {
                       ],
                     ),
                   ),
-
-                  // Book button
                   SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,

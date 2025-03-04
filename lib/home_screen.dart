@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'movie_list_screen.dart';
-import 'bookings_screen.dart';
+import 'bookings_screen.dart'; // Used for navigation
 import 'profile_screen.dart';
+import 'bookinghistoryscreen.dart'; // Used for navigation
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -16,6 +16,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   String _selectedCategory = 'All';
+  String? _selectedLocationId; // Track selected location ID
+  String? _selectedLocationName; // Track selected location name
   final PageController _pageController = PageController();
   final List<String> categories = [
     'All',
@@ -25,56 +27,42 @@ class _HomeScreenState extends State<HomeScreen> {
     'Horror'
   ];
 
-  // Hardcoded movies data for both banner and grid
-  final List<Map<String, dynamic>> bannerMovies = [
-    {
-      'title': 'Avengers: Endgame',
-      'imageUrl':
-          'https://lumiere-a.akamaihd.net/v1/images/p_avengersendgame_19751_e14a0104.jpeg',
-      'genre': 'Action/Sci-Fi',
-      'rating': '9.5/10',
-      'duration': '181 min',
-      'price': '\$12.99',
-    },
-    {
-      'title': 'The Dark Knight',
-      'imageUrl':
-          'https://m.media-amazon.com/images/M/MV5BMTMxNTMwODM0NF5BMl5BanBnXkFtZTcwODAyMTk2Mw@@._V1_.jpg',
-      'genre': 'Action/Drama',
-      'rating': '9.0/10',
-      'duration': '152 min',
-      'price': '\$11.99',
-    },
-    {
-      'title': 'Inception',
-      'imageUrl':
-          'https://m.media-amazon.com/images/M/MV5BMjAxMzY3NjcxNF5BMl5BanBnXkFtZTcwNTI5OTM0Mw@@._V1_.jpg',
-      'genre': 'Sci-Fi/Action',
-      'rating': '8.8/10',
-      'duration': '148 min',
-      'price': '\$10.99',
-    },
-  ];
+  // Firestore instance
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final List<Map<String, dynamic>> gridMovies = [
-    {
-      'title': 'Spider-Man: No Way Home',
-      'imageUrl':
-          'https://m.media-amazon.com/images/M/MV5BZWMyYzFjYTYtNTRjYi00OGExLWE2YzgtOGRmYjAxZTU3NzBiXkEyXkFqcGdeQXVyMzQ0MzA0NTM@._V1_.jpg',
-      'genre': 'Action/Adventure',
-      'rating': '8.7/10',
-      'price': '\$12.99',
-    },
-    {
-      'title': 'Joker',
-      'imageUrl':
-          'https://m.media-amazon.com/images/M/MV5BNGVjNWI4ZGUtNzE0MS00YTJmLWE0ZDctN2ZiYTk2YmI3NTYyXkEyXkFqcGdeQXVyMTkxNjUyNQ@@._V1_.jpg',
-      'genre': 'Drama/Crime',
-      'rating': '8.4/10',
-      'price': '\$11.99',
-    },
-    // Add more movies as needed
-  ];
+  // Fetch movies from Firestore based on selected location
+  Future<List<Map<String, dynamic>>> _fetchMovies() async {
+    try {
+      Query query = _firestore.collection('movies');
+
+      // Filter movies by location if a location is selected
+      if (_selectedLocationId != null) {
+        query = query.where('locationId', isEqualTo: _selectedLocationId);
+      }
+
+      final QuerySnapshot snapshot = await query.get();
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'id': doc.id,
+          'title': data['title'] ?? 'No Title',
+          'imageUrl': data['imageUrl'] ?? '',
+          'genre': data['genre'] ?? 'Unknown Genre',
+          'rating': data['rating']?.toString() ?? '0.0',
+          'duration': data['duration']?.toString() ?? '0',
+          'price': data['price']?.toString() ?? '0',
+          'locationId':
+              data['locationId'] ?? '', // Ensure locationId is included
+        };
+      }).toList();
+    } catch (e) {
+      print('Error fetching movies: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading movies: ${e.toString()}')),
+      );
+      return [];
+    }
+  }
 
   @override
   void dispose() {
@@ -82,11 +70,37 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Widget _buildBanner() {
+  // Method to handle navigation bar item selection
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+
+    // Navigate to the corresponding screen
+    switch (index) {
+      case 0: // Home
+        // Already on the home screen
+        break;
+      case 1: // Bookings
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => BookingHistoryScreen()),
+        );
+        break;
+      case 2: // Profile
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ProfileScreen()),
+        );
+        break;
+    }
+  }
+
+  Widget _buildBanner(List<Map<String, dynamic>> movies) {
     return Container(
       height: 250,
       child: CarouselSlider.builder(
-        itemCount: bannerMovies.length,
+        itemCount: movies.length,
         options: CarouselOptions(
           height: 250,
           viewportFraction: 0.9,
@@ -96,15 +110,14 @@ class _HomeScreenState extends State<HomeScreen> {
           autoPlayAnimationDuration: Duration(milliseconds: 800),
         ),
         itemBuilder: (context, index, realIndex) {
-          final movie = bannerMovies[index];
+          final movie = movies[index];
           return GestureDetector(
             onTap: () {
               // Navigate to movie details/booking screen
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      BookingScreen(movieId: 'movie_${index}'),
+                  builder: (context) => BookingScreen(movieId: movie['id']),
                 ),
               );
             },
@@ -117,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.black26,
                     blurRadius: 5,
                     offset: Offset(0, 2),
-                  ),
+                  )
                 ],
               ),
               child: Stack(
@@ -160,10 +173,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           movie['title'],
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold),
                         ),
                         SizedBox(height: 8),
                         Row(
@@ -197,8 +209,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => BookingScreen(
-                                        movieId: 'movie_${index}'),
+                                    builder: (context) =>
+                                        BookingScreen(movieId: movie['id']),
                                   ),
                                 );
                               },
@@ -249,7 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMovieGrid() {
+  Widget _buildMovieGrid(List<Map<String, dynamic>> movies) {
     return GridView.builder(
       shrinkWrap: true,
       physics: NeverScrollableScrollPhysics(),
@@ -260,9 +272,9 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
-      itemCount: gridMovies.length,
+      itemCount: movies.length,
       itemBuilder: (context, index) {
-        final movie = gridMovies[index];
+        final movie = movies[index];
         return Card(
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
@@ -274,8 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      BookingScreen(movieId: 'grid_movie_${index}'),
+                  builder: (context) => BookingScreen(movieId: movie['id']),
                 ),
               );
             },
@@ -306,19 +317,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           movie['title'],
                           style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
+                              fontWeight: FontWeight.bold, fontSize: 14),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         SizedBox(height: 4),
                         Text(
                           movie['genre'],
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                          ),
+                          style:
+                              TextStyle(color: Colors.grey[600], fontSize: 12),
                         ),
                         Spacer(),
                         Row(
@@ -337,9 +344,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               movie['price'],
                               style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green,
-                              ),
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green),
                             ),
                           ],
                         ),
@@ -363,8 +369,14 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(Icons.location_on, size: 20),
             SizedBox(width: 8),
-            Text('04dVBjgzmkvASPREILp0'),
-            Icon(Icons.arrow_drop_down),
+            Text(_selectedLocationName ??
+                'Select Location'), // Display location name
+            IconButton(
+              icon: Icon(Icons.arrow_drop_down),
+              onPressed: () {
+                _showLocationSelector(context); // Open location selector
+              },
+            ),
           ],
         ),
         actions: [
@@ -374,34 +386,40 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildBanner(),
-            SizedBox(height: 16),
-            _buildCategoryChips(),
-            Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Now Showing',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _fetchMovies(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(child: Text('No movies found for this location'));
+          }
+
+          final movies = snapshot.data!;
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildBanner(movies),
+                SizedBox(height: 16),
+                _buildCategoryChips(),
+                Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Now Showing',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
+                _buildMovieGrid(movies),
+              ],
             ),
-            _buildMovieGrid(),
-          ],
-        ),
+          );
+        },
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+        onDestinationSelected: _onItemTapped,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home),
@@ -416,6 +434,42 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Profile',
           ),
         ],
+      ),
+    );
+  }
+
+  // Method to show location selector
+  void _showLocationSelector(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => FutureBuilder<QuerySnapshot>(
+        future: _firestore.collection('locations').get(),
+        builder: (ctx, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error loading locations'));
+          }
+          if (!snapshot.hasData) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          final locations = snapshot.data!.docs;
+          return ListView.builder(
+            padding: EdgeInsets.all(16),
+            itemCount: locations.length,
+            itemBuilder: (ctx, i) => ListTile(
+              leading: Icon(Icons.location_on),
+              title: Text(locations[i]['name']),
+              onTap: () {
+                setState(() {
+                _selectedLocationId = locations[i].id; // Use document ID
+                _selectedLocationName = locations[i]['name'];
+              });
+                Navigator.pop(ctx); // Close the bottom sheet
+                _fetchMovies(); // Refresh movies after selecting location
+              },
+            ),
+          );
+        },
       ),
     );
   }
